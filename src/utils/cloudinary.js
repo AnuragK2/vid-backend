@@ -1,5 +1,6 @@
  import {v2 as cloudinary} from 'cloudinary';
  import fs from 'fs';
+ import path from 'path';
 
  cloudinary.config({
         cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -11,15 +12,27 @@
         try {
             if(!localFilePath) return null;
 
+            // Check if file exists before uploading
+            if(!fs.existsSync(localFilePath)) {
+                console.log(`File not found at path: ${localFilePath}`);
+                return null;
+            }
+
             // Upload the file on Cloudinary
             const response= await cloudinary.uploader.upload(localFilePath, {
                 resource_type: 'auto',
             })
-            fs.unlinkSync(localFilePath); // Delete the local file after successful upload
+            // Delete the local file after successful upload
+            if(fs.existsSync(localFilePath)) {
+                fs.unlinkSync(localFilePath);
+            }
             return response;
         } catch (error) {
             console.log('Error uploading file to Cloudinary:', error);
-            fs.unlinkSync(localFilePath); // Delete the local file if upload fails
+            // Delete the local file if upload fails (if it exists)
+            if(fs.existsSync(localFilePath)) {
+                fs.unlinkSync(localFilePath);
+            }
             return null;
         }
     }
