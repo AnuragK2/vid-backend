@@ -197,4 +197,70 @@ const refreshAccessToken= asyncHandler(async (req, res) => {
     
 });
 
-export { registerUser , loginUser, logoutUser, refreshAccessToken};
+const changeCurrentPassword = asyncHandler(async (req, res) => {
+    const {oldPassword, newPassword} = req.body;
+    
+    const user = await User.findById(req.user?._id);
+    user.isPasswordCorrect(oldPassword, async (err, isMatch) => {
+        if(err){
+            throw new ApiError(500, "Error comparing passwords");
+        }
+        if(!isMatch){
+            throw new ApiError(401, "Old password is incorrect");
+        }
+        user.password = newPassword;
+        await user.save({ validateBeforeSave: false});
+        return res.status(200).json(new ApiResponse(200, null, "Password changed successfully"));
+    });
+});
+
+const getCurrentUser = asyncHandler(async (req, res) => {
+    return res.status(200).json(new ApiResponse(200, req.user, "Current user details fetched successfully"));
+});
+
+const updateAccountDetails = asyncHandler(async (req, res) => {
+     const { fullName, username, email } = req.body;
+     if(!fullName && !username && !email){
+        throw new ApiError(400, "At least one field is required");
+     }
+
+        const user = await User.findByIdAndUpdate(req.user._id, {
+            $set: {
+                fullname: fullName,
+                username: username.toLowerCase(),
+                email
+            }
+        }, { new: true }).select("-password -refreshToken");
+
+        if(!user){
+            throw new ApiError(500, "Failed to update user details");
+        }
+
+        return res.status(200).json(new ApiResponse(200, user, "Account details updated successfully"));
+});
+
+const updateProfileImages = asyncHandler(async (req, res) => {
+    const avatarLocalPath = req.files?.avatar?.[0]?.path;
+    const coverImageLocalPath = req.files?.coverImage?.[0]?.path;
+
+    if(!avatarLocalPath && !coverImageLocalPath){
+        throw new ApiError(400, "At least one image (avatar or cover image) is required for update");
+    }
+
+    const uploadResponse = await uploadOnCloudinary(avatarLocalPath || coverImageLocalPath);
+    if(!uploadResponse){
+        throw new ApiError(500, "Failed to upload image");
+    }
+
+    await User.findByIdAndUpdate(req.user._id, {
+        $set: {
+            avatar: avatarLocalPath ? uploadResponse.url : undefined,
+            coverImage: coverImageLocalPath ? uploadResponse.url : undefined
+        }
+    }, { new: true }).select("-password -refreshToken");
+
+    return res.status(200).json(new ApiResponse(200, null, "Profile images updated successfully"));
+
+});
+
+export { registerUser , loginUser, logoutUser, refreshAccessToken, changeCurrentPassword, getCurrentUser, updateAccountDetails, updateProfileImages };
